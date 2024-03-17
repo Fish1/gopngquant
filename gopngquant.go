@@ -26,7 +26,10 @@ func CompressFile(input string, output string) error {
 	if err != nil {
 		return err
 	}
-	bytesToFile(output, bytes)
+	err = bytesToFile(output, bytes)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -79,7 +82,10 @@ func compress(gopngimage gopngImage) ([]byte, error) {
 	image.Pix = pixels
 
 	buffer := new(bytes.Buffer)
-	err := png.Encode(buffer, image)
+	encoder := png.Encoder{
+		CompressionLevel: png.BestCompression,
+	}
+	err := encoder.Encode(buffer, image)
 	if err != nil {
 		return nil, err
 	}
@@ -112,29 +118,17 @@ func imageFromBytes(data []byte) gopngImage {
 	}
 }
 
-func bytesToFile(filename string, data []byte) {
+func bytesToFile(filename string, data []byte) error {
 	file, err := os.Create(filename)
+	defer file.Close()
 	if err != nil {
-		panic(err)
+		return err
 	}
-	image, _, err := image.Decode(bytes.NewReader(data))
+	_, err = file.Write(data)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	encoder := png.Encoder{
-		CompressionLevel: png.BestCompression,
-	}
-	err = encoder.Encode(file, image)
-	if err != nil {
-		panic(err)
-	}
-	/*
-		_, err = file.Write(data)
-		if err != nil {
-			panic(err)
-		}
-	*/
-	file.Close()
+	return nil
 }
 
 func imageFromFile(filename string) gopngImage {
