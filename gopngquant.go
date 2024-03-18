@@ -1,28 +1,52 @@
 package gopngquant
 
 import (
-	"bytes"
+	Bytes "bytes"
 	"errors"
 	"fmt"
-	"image"
+	Image "image"
 	"image/color"
 	"image/png"
 	_ "image/png"
-	"log"
 	"os"
 
 	"github.com/fish1/golibimagequant"
 )
 
-type gopngImage struct {
-	data   []byte
-	width  int
-	height int
+type Options struct {
+	Speed         int
+	MinQuality    int
+	TargetQuality int
 }
 
-func CompressFile(input string, output string) error {
-	image := imageFromFile(input)
-	bytes, err := compress(image)
+func CompressImage(input Image.Image, options Options) (Image.Image, error) {
+	if err := validateOptions(options); err != nil {
+		return nil, err
+	}
+	bytes, width, height, err := bytesFromImage(input)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err = compress(bytes, width, height, options)
+	if err != nil {
+		return nil, err
+	}
+	image, err := png.Decode(Bytes.NewReader(bytes))
+	if err != nil {
+		return nil, err
+	}
+	return image, nil
+}
+
+func CompressFile(input string, output string, options Options) error {
+	if err := validateOptions(options); err != nil {
+		return err
+	}
+	bytes, width, height, err := bytesFromFile(input)
+	if err != nil {
+		return err
+	}
+	bytes, err = compress(bytes, width, height, options)
 	if err != nil {
 		return err
 	}
@@ -33,27 +57,34 @@ func CompressFile(input string, output string) error {
 	return nil
 }
 
-func CompressBytes(data []byte) ([]byte, error) {
-	image := imageFromBytes(data)
-	bytes, err := compress(image)
-	if err != nil {
-		return nil, err
+func validateOptions(options Options) error {
+	if options.Speed < 1 || options.Speed > 11 {
+		return errors.New("speed must be between 1 and 11")
 	}
-	return bytes, nil
+	if options.TargetQuality < options.MinQuality {
+		return errors.New("target quality must be greater than or equal to min quality")
+	}
+	if options.MinQuality < 0 || options.MinQuality > 100 {
+		return errors.New("min quality must be greater than or equal to min quality")
+	}
+	if options.TargetQuality < 0 || options.TargetQuality > 100 {
+		return errors.New("target quality must be greater than or equal to min quality")
+	}
+	return nil
 }
 
-func compress(gopngimage gopngImage) ([]byte, error) {
+func compress(input []byte, width int, height int, options Options) ([]byte, error) {
 	cattr := golibimagequant.CreateAttr()
 	defer golibimagequant.DestroyAttr(cattr)
-	cerr := golibimagequant.SetQuality(cattr, 0, 25)
+	cerr := golibimagequant.SetQuality(cattr, options.MinQuality, options.TargetQuality)
 	if cerr != 0 {
 		return nil, errors.New(fmt.Sprintf("error setting quality. liq error: %d", cerr))
 	}
-	cerr = golibimagequant.SetSpeed(cattr, 1)
+	cerr = golibimagequant.SetSpeed(cattr, options.Speed)
 	if cerr != 0 {
 		return nil, errors.New(fmt.Sprintf("error setting speed. liq error: %d", cerr))
 	}
-	cimage := golibimagequant.CreateImageRGBA(cattr, &gopngimage.data[0], gopngimage.width, gopngimage.height, 0)
+	cimage := golibimagequant.CreateImageRGBA(cattr, &input[0], width, height, 0)
 	defer golibimagequant.DestroyImage(cimage)
 
 	var cresult *golibimagequant.LiqResult
@@ -63,59 +94,34 @@ func compress(gopngimage gopngImage) ([]byte, error) {
 		return nil, errors.New(fmt.Sprintf("error quantizing image. liq error: %d", cerr))
 	}
 
-	pixels := make([]byte, gopngimage.width*gopngimage.height)
-	cerr = golibimagequant.WriteRemappedImage(cresult, cimage, &pixels[0], uint64(len(pixels)))
+	newPixels := make([]byte, width*height)
+	cerr = golibimagequant.WriteRemappedImage(cresult, cimage, &newPixels[0], uint64(len(newPixels)))
 	if cerr != 0 {
 		return nil, errors.New(fmt.Sprintf("error writing remapped image. liq error: %d", cerr))
 	}
 
 	cpalette := golibimagequant.GetPalette(cresult)
 
-	rectangle := image.Rect(0, 0, gopngimage.width, gopngimage.height)
+	rectangle := Image.Rect(0, 0, width, height)
 	palette := make(color.Palette, 0)
 	for index := 0; index < int(cpalette.Count); index += 1 {
 		entry := cpalette.Entries[index]
 		palette = append(palette, golibimagequant.NewRGBA(entry))
 	}
 
-	image := image.NewPaletted(rectangle, palette)
-	image.Pix = pixels
+	paletted := Image.NewPaletted(rectangle, palette)
+	paletted.Pix = newPixels
 
-	buffer := new(bytes.Buffer)
+	buffer := new(Bytes.Buffer)
 	encoder := png.Encoder{
 		CompressionLevel: png.BestCompression,
 	}
-	err := encoder.Encode(buffer, image)
+	err := encoder.Encode(buffer, paletted)
 	if err != nil {
 		return nil, err
 	}
 
 	return buffer.Bytes(), nil
-}
-
-func imageFromBytes(data []byte) gopngImage {
-	image, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		log.Fatalln(err)
-	}
-	size := image.Bounds().Size()
-	width := size.X
-	height := size.Y
-	raw := make([]byte, width*height*4)
-
-	for y := 0; y < height; y += 1 {
-		for x := 0; x < width; x += 1 {
-			index := (y + x) * 4
-			r, g, b, a := image.At(x, y).RGBA()
-			raw[index], raw[index+1], raw[index+2], raw[index+3] = uint8(r), uint8(g), uint8(b), uint8(a)
-		}
-	}
-
-	return gopngImage{
-		data:   raw,
-		width:  width,
-		height: height,
-	}
 }
 
 func bytesToFile(filename string, data []byte) error {
@@ -131,15 +137,25 @@ func bytesToFile(filename string, data []byte) error {
 	return nil
 }
 
-func imageFromFile(filename string) gopngImage {
+func bytesFromFile(filename string) ([]byte, int, int, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		panic(err)
+		return nil, 0, 0, err
 	}
 	defer file.Close()
-	image, _, err := image.Decode(file)
+	image, err := png.Decode(file)
 	if err != nil {
-		panic(err)
+		return nil, 0, 0, err
+	}
+	return bytesFromImage(image)
+}
+
+func bytesFromImage(image Image.Image) ([]byte, int, int, error) {
+	switch image := image.(type) {
+	case *Image.NRGBA:
+		return image.Pix, image.Rect.Dx(), image.Rect.Dy(), nil
+	case *Image.RGBA:
+		return image.Pix, image.Rect.Dx(), image.Rect.Dy(), nil
 	}
 
 	size := image.Bounds().Size()
@@ -154,10 +170,5 @@ func imageFromFile(filename string) gopngImage {
 			raw[index], raw[index+1], raw[index+2], raw[index+3] = byte(r), byte(g), byte(b), byte(a)
 		}
 	}
-
-	return gopngImage{
-		data:   raw,
-		width:  width,
-		height: height,
-	}
+	return raw, width, height, nil
 }
