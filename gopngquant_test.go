@@ -50,3 +50,51 @@ func Test_ImageCompression(t *testing.T) {
 		panic(err)
 	}
 }
+
+func Test_Validation_Speed_Below0(t *testing.T) {
+	options := Options{
+		Speed:         -5,
+		MinQuality:    0,
+		TargetQuality: 100,
+	}
+	err := CompressFile("./images/example.png", "./images/should_fail.png", options)
+	if err == nil {
+		t.Fail()
+	}
+}
+
+func Test_Validation_MinQuality_Below0(t *testing.T) {
+	options := Options{
+		Speed:         1,
+		MinQuality:    -1,
+		TargetQuality: 100,
+	}
+	err := CompressFile("./images/example.png", "./images/should_fail.png", options)
+	if err == nil {
+		t.Fail()
+	}
+}
+
+func Test_Validation_TargetQuality_BelowMinQuality(t *testing.T) {
+	options := Options{
+		Speed:         1,
+		MinQuality:    50,
+		TargetQuality: 25,
+	}
+	err := CompressFile("./images/example.png", "./images/should_fail.png", options)
+	if err == nil {
+		t.Fail()
+	}
+}
+
+func Test_Validation_TargetQuality_Above100(t *testing.T) {
+	options := Options{
+		Speed:         1,
+		MinQuality:    50,
+		TargetQuality: 90,
+	}
+	err := CompressFile("./images/example.png", "./images/should_fail.png", options)
+	if err == nil {
+		t.Fail()
+	}
+}

@@ -1,3 +1,4 @@
-./images/output_gopngquant_byte.png
-./images/output_gopngquant_file.png
-./gopngquant
+images/output_gopngquant_byte.png
+images/output_gopngquant_file.png
+images/should_fail.png
+gopngquant
