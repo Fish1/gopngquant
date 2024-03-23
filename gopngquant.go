@@ -10,7 +10,7 @@ import (
 	_ "image/png"
 	"os"
 
-	"github.com/fish1/golibimagequant"
+	"github.com/yapms/golibimagequant"
 )
 
 type Options struct {

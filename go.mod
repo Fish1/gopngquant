@@ -1,5 +1,5 @@
-module github.com/fish1/gopngquant
+module github.com/yapms/gopngquant
 
 go 1.21.7
 
-require github.com/fish1/golibimagequant v0.0.3-alpha
+require github.com/yapms/golibimagequant v0.0.1-alpha

@@ -91,7 +91,7 @@ func Test_Validation_TargetQuality_Above100(t *testing.T) {
 	options := Options{
 		Speed:         1,
 		MinQuality:    50,
-		TargetQuality: 90,
+		TargetQuality: 101,
 	}
 	err := CompressFile("./images/example.png", "./images/should_fail.png", options)
 	if err == nil {
